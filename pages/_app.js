@@ -1,4 +1,5 @@
 import { ThirdwebProvider } from "@thirdweb-dev/react"
+// import { Chain } from "@thirdweb-dev/chains"
 import "@/styles/globals.css"
 import { Red_Hat_Text } from "next/font/google"
 
