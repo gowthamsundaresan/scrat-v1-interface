@@ -69,8 +69,8 @@ export default function index() {
 
     useEffect(() => {
         if (chain && chain.name.toLowerCase() != "polygon mainnet") {
-            // setChainOk(false)
-            setChainOk(true) // testing
+            setChainOk(false)
+            // setChainOk(true) // testing
         } else {
             setChainOk(true)
         }

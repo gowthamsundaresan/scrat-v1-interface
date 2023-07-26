@@ -246,7 +246,6 @@ export const CloseLongPosition = ({ id, ticker, current, closeCloseLongModal }) 
                 }
 
                 // Approvals
-                console.log("totalPositionConverted for approval: ", totalPositionConverted)
                 let ap1 = await tokenContract.call("approve", [
                     crossMarginTradingAddress,
                     totalPositionConverted,
