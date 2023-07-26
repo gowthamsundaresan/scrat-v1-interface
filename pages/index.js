@@ -41,7 +41,7 @@ export default function index() {
     })
 
     const [deFiContractToAddress, setDeFiContractToAddress] = useState({
-        CrossMarginTrading: "0x54f7D6379BAe2A245Dcc86E709f89835116bF202",
+        CrossMarginTrading: "0x3960F87f59D44c2A1f8afDAe037dF1Fc3BD86cCE",
         // CrossMarginTrading: "0x11e73abC581190B9fe31B804a5877aB5C2754C64", // Testing on local fork
         PoolAddressesProvider: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
         Quoter: "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
@@ -69,8 +69,8 @@ export default function index() {
 
     useEffect(() => {
         if (chain && chain.name.toLowerCase() != "polygon mainnet") {
-            setChainOk(false)
-            // setChainOk(true) // testing
+            // setChainOk(false)
+            setChainOk(true) // testing
         } else {
             setChainOk(true)
         }
