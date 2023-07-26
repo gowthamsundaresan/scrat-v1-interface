@@ -15,9 +15,9 @@ export const MarginAccountDashboard = () => {
     const { tokenPrices, pricesLoading } = useTokenPrice()
     const { polygonTickerToAddress, deFiContractToAddress } = useContext(PolygonAddressesContext)
 
-    const [healthFactor, setHealthFactor] = useState("")
-    const [netPosition, setNetPosition] = useState("")
-    const [minNetPosition, setMinNetPosition] = useState("")
+    const [healthFactor, setHealthFactor] = useState("Loading")
+    const [netPosition, setNetPosition] = useState(" Loading")
+    const [minNetPosition, setMinNetPosition] = useState(" Loading")
     const [isDepositModalOpen, setDepositModalOpen] = useState(false)
     const [isWithdrawModalOpen, setWithdrawModalOpen] = useState(false)
     const [loading, setLoading] = useState(true)

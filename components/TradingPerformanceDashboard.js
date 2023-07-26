@@ -9,9 +9,9 @@ export const TradingPerformanceDashboard = () => {
     const { polygonTickerToAddress } = useContext(PolygonAddressesContext)
     const { tokenPrices, pricesLoading } = useTokenPrice()
 
-    const [inAccount, setInAccount] = useState([])
-    const [unrealizedPandL, setUnrealizedPandL] = useState([])
-    const [realizedPandL, setRealizedPandL] = useState([])
+    const [inAccount, setInAccount] = useState([" Loading"])
+    const [unrealizedPandL, setUnrealizedPandL] = useState([" Loading"])
+    const [realizedPandL, setRealizedPandL] = useState([" Loading"])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -162,6 +162,7 @@ export const TradingPerformanceDashboard = () => {
                 unrealizedPandL = unrealizedPandL + Number(pAndL)
             })
         }
+        unrealizedPandL = Math.floor(unrealizedPandL * 1000) / 1000
         setUnrealizedPandL(unrealizedPandL)
         return {}
     }

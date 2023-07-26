@@ -6,7 +6,7 @@ const Navbar = () => {
     return (
         <nav className="flex items-center justify-between px-5 bg-scrat-gray">
             <div className="flex items-center space-x-8">
-                <Link href="https//scrat.finance/">
+                <Link href="https://scrat.finance/">
                     <img
                         src="../scrat-finance-logo.svg"
                         alt="Scrat Finance Logo"
