@@ -24,7 +24,7 @@ export const MarginAccountDashboard = () => {
 
     console.log("--------------------------")
     console.log("signer: ", signer)
-    console.log("pricesLoading: ", pricesLoading.toString())
+    console.log("tokenPrices: ", tokenPrices)
     console.log("polygonTickerToAddress: ", polygonTickerToAddress)
     console.log("deFiContractToAddress: ", deFiContractToAddress)
     console.log("--------------------------")
@@ -44,6 +44,7 @@ export const MarginAccountDashboard = () => {
             Object.keys(deFiContractToAddress).length !== 0
         ) {
             console.log("UseEffect 2")
+            setLoading(false)
             fetchData(signer)
         }
     }, [signer, tokenPrices, polygonTickerToAddress, deFiContractToAddress])
