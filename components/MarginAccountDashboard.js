@@ -24,6 +24,10 @@ export const MarginAccountDashboard = () => {
 
     useEffect(() => {
         if (signer && !pricesLoading && !polygonTickerToAddress && !deFiContractToAddress) {
+            console.log("signer: ", signer.toString())
+            console.log("pricesLoading: ", pricesLoading.toString())
+            console.log("polygonTickerToAddress: ", polygonTickerToAddress.toString())
+            console.log("deFiContractToAddress: ", deFiContractToAddress.toString())
             setLoading(false)
         }
     }, [signer, pricesLoading, polygonTickerToAddress, deFiContractToAddress])
