@@ -14,7 +14,7 @@ const Navbar = () => {
                     />
                 </Link>
 
-                <Link href="/dashboard">
+                <Link href="/">
                     <span className="cursor-pointer text-gray-300 hover:text-white mr-8">
                         Dashboard
                     </span>

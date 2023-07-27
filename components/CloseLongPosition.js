@@ -275,70 +275,75 @@ export const CloseLongPosition = ({ id, ticker, current, closeCloseLongModal }) 
     }
 
     return (
-        <div className="mt-8 grid grid-cols-2 gap-6 items-center">
-            <div className="text-lg font-bold text-black col-span-2">Close Long Position</div>
+        <div>
+            <div className="mt-8 grid grid-cols-2 gap-6 items-center">
+                <div className="text-lg font-bold text-black col-span-2">Close Long Position</div>
 
-            <div className="text-base font-regular text-black">Asset</div>
-            <div className="text-base font-regular text-black">{ticker}</div>
+                <div className="text-base font-regular text-black">Asset</div>
+                <div className="text-base font-regular text-black">{ticker}</div>
 
-            <div className="text-base font-regular text-black">Current Token Price</div>
-            <div className="text-base font-regular text-black">${tokenPrice}</div>
+                <div className="text-base font-regular text-black">Current Token Price</div>
+                <div className="text-base font-regular text-black">${tokenPrice}</div>
 
-            <div className="text-base font-regular text-black">Current Position</div>
-            <div className="text-base font-regular text-black">${current}</div>
+                <div className="text-base font-regular text-black">Current Position</div>
+                <div className="text-base font-regular text-black">${current}</div>
 
-            <div className="text-base font-regular text-black">Current P/L</div>
-            <div className="text-base font-regular text-black">${profit}</div>
+                <div className="text-base font-regular text-black">Current P/L</div>
+                <div className="text-base font-regular text-black">${profit}</div>
 
-            <div className="text-base font-regular text-black">Amount to Close (USDC)</div>
-            <div>
-                <div className="flex items-center">
-                    <input
-                        type="number"
-                        value={requestAmount}
-                        max={Number(current)}
-                        onChange={(e) => {
-                            let newValue = e.target.value
-                            if (newValue === "" || (!isNaN(newValue) && newValue >= 0)) {
-                                setRequestAmount(newValue)
+                <div className="text-base font-regular text-black">Amount to Close (USDC)</div>
+                <div>
+                    <div className="flex items-center">
+                        <input
+                            type="number"
+                            value={requestAmount}
+                            max={Number(current)}
+                            onChange={(e) => {
+                                let newValue = e.target.value
+                                if (newValue === "" || (!isNaN(newValue) && newValue >= 0)) {
+                                    setRequestAmount(newValue)
+                                    setIsOverMaxPositionSize(false)
+                                }
+                                if (Number(newValue) > Number(current)) {
+                                    setIsOverMaxPositionSize(true)
+                                }
+                            }}
+                            placeholder="10 USDC"
+                            className={`bg-white placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 ${
+                                isOverMaxPositionSize
+                                    ? "text-red-500 border-red-500"
+                                    : "text-black border-black"
+                            }`}
+                        ></input>
+
+                        <button
+                            onClick={() => {
+                                setRequestAmount(Number(current))
                                 setIsOverMaxPositionSize(false)
-                            }
-                            if (Number(newValue) > Number(current)) {
-                                setIsOverMaxPositionSize(true)
-                            }
-                        }}
-                        placeholder="10 USDC"
-                        className={`bg-white placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 ${
-                            isOverMaxPositionSize
-                                ? "text-red-500 border-red-500"
-                                : "text-black border-black"
-                        }`}
-                    ></input>
-
-                    <button
-                        onClick={() => {
-                            setRequestAmount(Number(current))
-                            setIsOverMaxPositionSize(false)
-                        }}
-                        className="text-black text-sm ml-2"
-                        style={{ width: "50px" }}
-                    >
-                        MAX
-                    </button>
-                </div>
-
-                {isOverMaxPositionSize && (
-                    <div className="text-red-500 text-xs mt-2">
-                        Maximum position size is {current}
+                            }}
+                            className="text-black text-sm ml-2"
+                            style={{ width: "50px" }}
+                        >
+                            MAX
+                        </button>
                     </div>
-                )}
+
+                    {isOverMaxPositionSize && (
+                        <div className="text-red-500 text-xs mt-2">
+                            Maximum position size is {current}
+                        </div>
+                    )}
+                </div>
+                <div className="text-base font-regular text-black ">New Health Factor</div>
+                <div className="text-base font-regular text-black ">{newHealthFactor}</div>
+
+                <div className="text-base font-regular text-black">New Min. Net Position</div>
+                <div className="text-base font-regular text-black">${newMinNetPosition}</div>
             </div>
-            <div className="text-base font-regular text-black ">New Health Factor</div>
-            <div className="text-base font-regular text-black ">{newHealthFactor}</div>
-
-            <div className="text-base font-regular text-black">New Min. Net Position</div>
-            <div className="text-base font-regular text-black">${newMinNetPosition}</div>
-
+            <div className="flex text-xs justify-center items-center font-regular text-black mt-8">
+                Note: If approvals on your wallet require you to input an amount, click "Use
+                Default".
+            </div>
             <div
                 onClick={loading || isOverMaxPositionSize ? null : handleClick}
                 className={`flex text-base justify-center items-center text-black ${
@@ -353,7 +358,7 @@ export const CloseLongPosition = ({ id, ticker, current, closeCloseLongModal }) 
             </div>
             {transactionError && (
                 <div
-                    className="text-red-500 text-xs overflow-hidden text-overflow-ellipsis white-space-nowrap w-full"
+                    className="text-red-500 text-xs overflow-hidden text-overflow-ellipsis white-space-nowrap w-full mt-2"
                     style={{ maxWidth: "100%" }}
                 >
                     {transactionError.length > 100

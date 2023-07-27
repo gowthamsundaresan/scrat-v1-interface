@@ -253,85 +253,90 @@ export const OpenShortPosition = ({ closeOpenShortModal }) => {
     }
 
     return (
-        <div className="mt-8 grid grid-cols-2 gap-6 items-center">
-            <div className="text-lg font-bold text-black col-span-2">Open Short Position</div>
+        <div>
+            <div className="mt-8 grid grid-cols-2 gap-6 items-center">
+                <div className="text-lg font-bold text-black col-span-2">Open Short Position</div>
 
-            <div className="text-base font-regular text-black">Choose Asset</div>
-            <div className="text-base font-regular text-black">
-                <select
-                    className="p-3 rounded-lg"
-                    value={selectedAsset}
-                    onChange={handleSelectChange}
-                >
-                    {Object.keys(polygonTickerToAddress)
-                        .filter((ticker) => ticker !== "USDC" && ticker !== "stMATIC")
-                        .map((ticker, index) => (
-                            <option key={index} value={ticker}>
-                                {ticker}
-                            </option>
-                        ))}
-                </select>
-            </div>
-
-            <div className="text-base font-regular text-black">Current Token Price</div>
-            <div className="text-base font-regular text-black">${tokenPrice}</div>
-
-            <div className="text-base font-regular text-black">Max Position Size</div>
-            <div className="text-base font-regular text-black">${maxPositionSize}</div>
-
-            <div className="text-base font-regular text-black">Position Size (USDC)</div>
-            <div>
-                <div className="flex items-center">
-                    <input
-                        type="number"
-                        value={requestAmount}
-                        max={Number(maxPositionSize)}
-                        onChange={(e) => {
-                            let newValue = e.target.value
-                            if (newValue === "" || (!isNaN(newValue) && newValue >= 0)) {
-                                setRequestAmount(newValue)
-                                setIsOverMaxPositionSize(false)
-                            }
-                            if (Number(newValue) > Number(maxPositionSize)) {
-                                setIsOverMaxPositionSize(true)
-                            }
-                        }}
-                        placeholder="10 USDC"
-                        className={`bg-white placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 ${
-                            isOverMaxPositionSize
-                                ? "text-red-500 border-red-500"
-                                : "text-black border-black"
-                        }`}
-                    ></input>
-
-                    <button
-                        onClick={() => {
-                            setRequestAmount(Number(maxPositionSize))
-                            setIsOverMaxPositionSize(false)
-                        }}
-                        className="text-black text-sm ml-2"
-                        style={{ width: "50px" }}
+                <div className="text-base font-regular text-black">Choose Asset</div>
+                <div className="text-base font-regular text-black">
+                    <select
+                        className="p-3 rounded-lg"
+                        value={selectedAsset}
+                        onChange={handleSelectChange}
                     >
-                        MAX
-                    </button>
+                        {Object.keys(polygonTickerToAddress)
+                            .filter((ticker) => ticker !== "USDC" && ticker !== "stMATIC")
+                            .map((ticker, index) => (
+                                <option key={index} value={ticker}>
+                                    {ticker}
+                                </option>
+                            ))}
+                    </select>
                 </div>
 
-                {isOverMaxPositionSize && (
-                    <div className="text-red-500 text-xs mt-2">
-                        Maximum position size is {maxPositionSize}
+                <div className="text-base font-regular text-black">Current Token Price</div>
+                <div className="text-base font-regular text-black">${tokenPrice}</div>
+
+                <div className="text-base font-regular text-black">Max Position Size</div>
+                <div className="text-base font-regular text-black">${maxPositionSize}</div>
+
+                <div className="text-base font-regular text-black">Position Size (USDC)</div>
+                <div>
+                    <div className="flex items-center">
+                        <input
+                            type="number"
+                            value={requestAmount}
+                            max={Number(maxPositionSize)}
+                            onChange={(e) => {
+                                let newValue = e.target.value
+                                if (newValue === "" || (!isNaN(newValue) && newValue >= 0)) {
+                                    setRequestAmount(newValue)
+                                    setIsOverMaxPositionSize(false)
+                                }
+                                if (Number(newValue) > Number(maxPositionSize)) {
+                                    setIsOverMaxPositionSize(true)
+                                }
+                            }}
+                            placeholder="10 USDC"
+                            className={`bg-white placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 ${
+                                isOverMaxPositionSize
+                                    ? "text-red-500 border-red-500"
+                                    : "text-black border-black"
+                            }`}
+                        ></input>
+
+                        <button
+                            onClick={() => {
+                                setRequestAmount(Number(maxPositionSize))
+                                setIsOverMaxPositionSize(false)
+                            }}
+                            className="text-black text-sm ml-2"
+                            style={{ width: "50px" }}
+                        >
+                            MAX
+                        </button>
                     </div>
-                )}
+
+                    {isOverMaxPositionSize && (
+                        <div className="text-red-500 text-xs mt-2">
+                            Maximum position size is {maxPositionSize}
+                        </div>
+                    )}
+                </div>
+
+                <div className="text-base font-regular text-black ">New Health Factor</div>
+                <div className="text-base font-regular text-black ">{newHealthFactor}</div>
+
+                <div className="text-base font-regular text-black">New Min. Net Position</div>
+                <div className="text-base font-regular text-black">${newMinNetPosition}</div>
+
+                <div className="text-base font-regular text-black ">Interest</div>
+                <div className="text-base font-regular text-black ">{interest}%</div>
             </div>
-
-            <div className="text-base font-regular text-black ">New Health Factor</div>
-            <div className="text-base font-regular text-black ">{newHealthFactor}</div>
-
-            <div className="text-base font-regular text-black">New Min. Net Position</div>
-            <div className="text-base font-regular text-black">${newMinNetPosition}</div>
-
-            <div className="text-base font-regular text-black ">Interest</div>
-            <div className="text-base font-regular text-black ">{interest}%</div>
-
+            <div className="flex text-xs justify-center items-center font-regular text-black mt-8">
+                Note: If approvals on your wallet require you to input an amount, click "Use
+                Default".
+            </div>
             <div
                 onClick={loading || isOverMaxPositionSize ? null : handleClick}
                 className={`flex text-base justify-center items-center text-black ${
@@ -346,7 +351,7 @@ export const OpenShortPosition = ({ closeOpenShortModal }) => {
             </div>
             {transactionError && (
                 <div
-                    className="text-red-500 text-xs overflow-hidden text-overflow-ellipsis white-space-nowrap w-full"
+                    className="text-red-500 text-xs overflow-hidden text-overflow-ellipsis white-space-nowrap w-full mt-2"
                     style={{ maxWidth: "100%" }}
                 >
                     {transactionError.length > 100
