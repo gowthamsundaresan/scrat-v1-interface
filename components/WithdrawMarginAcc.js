@@ -276,7 +276,16 @@ export const WithdrawMarginAcc = ({ closeWithdrawModal }) => {
             >
                 {loading ? "Loading..." : "Confirm"}
             </div>
-            {transactionError && <div className="text-red-500 text-xs">{transactionError}</div>}
+            {transactionError && (
+                <div
+                    className="text-red-500 text-xs overflow-hidden text-overflow-ellipsis white-space-nowrap w-full"
+                    style={{ maxWidth: "100%" }}
+                >
+                    {transactionError.length > 100
+                        ? transactionError.substring(0, 100) + "..."
+                        : transactionError}
+                </div>
+            )}
         </div>
     )
 }

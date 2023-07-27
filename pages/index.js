@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react"
 import NavBar from "@/components/NavBar"
-import { ConnectWallet, useSigner, useChain, useSwitchChain, ChainId } from "@thirdweb-dev/react"
+import Footer from "@/components/Footer"
+import { ConnectWallet, useSigner, useChain, useSwitchChain } from "@thirdweb-dev/react"
 import { Polygon } from "@thirdweb-dev/chains"
 import { SignerContext } from "../contexts/SignerContext"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
 import { MarginAccountDashboard } from "@/components/MarginAccountDashboard"
 import { PositionsDashboard } from "@/components/PositionsDashboard"
 import { TradingPerformanceDashboard } from "@/components/TradingPerformanceDashboard"
@@ -73,6 +73,9 @@ export default function index() {
                     )}
                 </div>
             )}
+            <div className="mt-16 md:mt-32">
+                <Footer />
+            </div>
         </div>
     )
 }
