@@ -22,15 +22,19 @@ export const MarginAccountDashboard = () => {
     const [isWithdrawModalOpen, setWithdrawModalOpen] = useState(false)
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        if (signer && !pricesLoading && !polygonTickerToAddress && !deFiContractToAddress) {
-            console.log("signer: ", signer.toString())
-            console.log("pricesLoading: ", pricesLoading.toString())
-            console.log("polygonTickerToAddress: ", polygonTickerToAddress.toString())
-            console.log("deFiContractToAddress: ", deFiContractToAddress.toString())
+    console.log("--------------------------")
+    console.log("signer: ", signer)
+    console.log("pricesLoading: ", pricesLoading.toString())
+    console.log("polygonTickerToAddress: ", polygonTickerToAddress)
+    console.log("deFiContractToAddress: ", deFiContractToAddress)
+    console.log("--------------------------")
+
+    /* useEffect(() => {
+        if (signer && !pricesLoading && polygonTickerToAddress && deFiContractToAddress) {
+            console.log("UseEffect 1")
             setLoading(false)
         }
-    }, [signer, pricesLoading, polygonTickerToAddress, deFiContractToAddress])
+    }, [signer, pricesLoading, polygonTickerToAddress, deFiContractToAddress]) */
 
     useEffect(() => {
         if (
@@ -39,11 +43,13 @@ export const MarginAccountDashboard = () => {
             Object.keys(polygonTickerToAddress).length !== 0 &&
             Object.keys(deFiContractToAddress).length !== 0
         ) {
+            console.log("UseEffect 2")
             fetchData(signer)
         }
     }, [signer, tokenPrices, polygonTickerToAddress, deFiContractToAddress])
 
     const fetchData = async (signer) => {
+        console.log("Fetchdata")
         // Addresses and Contracts
         const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
         const poolAddressesProviderContract = new ethers.Contract(
