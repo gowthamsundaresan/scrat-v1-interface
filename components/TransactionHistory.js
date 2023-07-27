@@ -1,27 +1,26 @@
 import React, { useEffect, useState, useContext } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { SignerContext } from "../contexts/SignerContext"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
+import { polygonTickerToAddress } from "../lib/polygonAddresses"
 
 export const TransactionHistory = () => {
     const signer = useContext(SignerContext)
-    const { polygonTickerToAddress } = useContext(PolygonAddressesContext)
 
     const [transactionHistory, setTransactionHistory] = useState([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (signer && !polygonTickerToAddress) {
+        if (signer) {
             setLoading(false)
         }
-    }, [signer, polygonTickerToAddress])
+    }, [signer])
 
     useEffect(() => {
-        if (signer && Object.keys(polygonTickerToAddress).length !== 0) {
+        if (signer) {
             setLoading(false)
             fetchData(signer)
         }
-    }, [signer, polygonTickerToAddress])
+    }, [signer])
 
     const fetchData = async (signer) => {
         // Fetch Open Actions from DB

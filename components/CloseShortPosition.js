@@ -2,26 +2,22 @@ import React, { useState, useContext, useEffect } from "react"
 import { SignerContext } from "../contexts/SignerContext"
 import { ThirdwebSDK } from "@thirdweb-dev/sdk"
 import { supabase } from "../lib/supabaseClient"
-import { useTokenPrice } from "./GetTokenPrice"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
+import {
+    polygonTickerToAddress,
+    polygonTickerToAAddress,
+    deFiContractToAddress,
+    liquidationThresholds,
+} from "../lib/polygonAddresses"
 const { ethers } = require("ethers")
 
 // Artifacts
 const ERC20ABI = require("../artifacts/ERC20ABI.json")
 const { abi: CrossMarginTradingABI } = require("../artifacts/CrossMarginTrading.json")
-const { abi: IPoolAddressesProviderABI } = require("../artifacts/IPoolAddressesProvider.json")
-const { abi: IPoolABI } = require("../artifacts/IPool.json")
 
 export const CloseShortPosition = ({ id, ticker, current, closeCloseShortModal }) => {
     const signer = useContext(SignerContext)
-    const { tokenPrices, pricesLoading } = useTokenPrice()
-    const {
-        polygonTickerToAddress,
-        polygonTickerToAAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    } = useContext(PolygonAddressesContext)
 
+    const [tokenPrices, setTokenPrices] = useState([])
     const [requestAmount, setRequestAmount] = useState("")
     const [tokenPrice, setTokenPrice] = useState("")
     const [profit, setProfit] = useState("")
@@ -32,63 +28,74 @@ export const CloseShortPosition = ({ id, ticker, current, closeCloseShortModal }
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (
-            signer &&
-            !pricesLoading &&
-            !polygonTickerToAddress &&
-            !polygonTickerToAAddress &&
-            !deFiContractToAddress &&
-            !liquidationThresholds
-        ) {
-            setLoading(false)
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        polygonTickerToAAddress,
-        liquidationThresholds,
-    ])
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 20000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(polygonTickerToAAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
+        if (signer && Object.keys(tokenPrices).length > 0) {
             setLoading(false)
             calculateConstantData(signer)
         }
-    }, [
-        signer,
-        tokenPrices,
-        polygonTickerToAddress,
-        polygonTickerToAAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    ])
+    }, [signer, tokenPrices])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(polygonTickerToAAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
-            setLoading(false)
-            calculateNewData(signer)
+        const fetchUserAccountData = async () => {
+            const res = await fetch("/api/userdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    signerAddress: signer._address,
+                    poolAddressesProviderAddress: deFiContractToAddress.PoolAddressesProvider,
+                }),
+            })
+
+            if (res.ok) {
+                const { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
+                    await res.json()
+
+                let newLT =
+                    (Number(currentLiquidationThreshold) * Number(totalCollateralBase)) /
+                        (Number(totalCollateralBase) - Number(requestAmount)) -
+                    (Number(requestAmount) * liquidationThresholds["USDC"]) /
+                        (Number(totalCollateralBase) - Number(requestAmount))
+
+                // New HF
+                setNewHealthFactor(
+                    (
+                        ((Number(totalCollateralBase) - Number(requestAmount)) * Number(newLT)) /
+                        (Number(totalDebtBase) - Number(requestAmount))
+                    ).toFixed(2)
+                )
+
+                // New Min NP
+                setNewMinNetPosition(
+                    (
+                        ((Number(totalDebtBase) - Number(requestAmount)) * 1.05) / Number(newLT) -
+                        (Number(totalDebtBase) - Number(requestAmount))
+                    ).toFixed(2)
+                )
+            }
         }
-    }, [
-        signer,
-        requestAmount,
-        polygonTickerToAddress,
-        polygonTickerToAAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    ])
+
+        if (signer && Object.keys(tokenPrices).length > 0) {
+            fetchUserAccountData()
+            setLoading(false)
+        }
+    }, [signer, tokenPrices, requestAmount])
 
     const calculateConstantData = async (signer) => {
         // Get row of position_id from Open Actions
@@ -110,53 +117,6 @@ export const CloseShortPosition = ({ id, ticker, current, closeCloseShortModal }
 
         // Latest Profit
         setProfit(Math.floor(pAndL * 1000) / 1000)
-    }
-
-    const calculateNewData = async (signer) => {
-        // Addresses and Contracts
-        const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
-        const poolAddressesProviderContract = new ethers.Contract(
-            poolAddressesProviderAddress,
-            IPoolAddressesProviderABI,
-            signer
-        )
-        const poolContractAddress = await poolAddressesProviderContract.getPool()
-
-        // Fetch and Format Data
-        let { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
-            await new ethers.Contract(poolContractAddress, IPoolABI, signer).getUserAccountData(
-                signer._address
-            )
-
-        totalCollateralBase = ethers.utils.formatUnits(totalCollateralBase.toString(), 8)
-        totalDebtBase = ethers.utils.formatUnits(totalDebtBase.toString(), 8)
-        currentLiquidationThreshold = ethers.utils.formatUnits(
-            currentLiquidationThreshold.toString(),
-            2
-        )
-        currentLiquidationThreshold = Number(currentLiquidationThreshold) / 100
-
-        // New HF
-        let newLT =
-            (Number(currentLiquidationThreshold) * Number(totalCollateralBase)) /
-                (Number(totalCollateralBase) - Number(requestAmount)) -
-            (Number(requestAmount) * liquidationThresholds["USDC"]) /
-                (Number(totalCollateralBase) - Number(requestAmount))
-
-        setNewHealthFactor(
-            (
-                ((Number(totalCollateralBase) - Number(requestAmount)) * Number(newLT)) /
-                (Number(totalDebtBase) - Number(requestAmount))
-            ).toFixed(2)
-        )
-
-        // New Min NP
-        setNewMinNetPosition(
-            (
-                ((Number(totalDebtBase) - Number(requestAmount)) * 1.05) / Number(newLT) -
-                (Number(totalDebtBase) - Number(requestAmount))
-            ).toFixed(2)
-        )
     }
 
     const handleClick = async () => {

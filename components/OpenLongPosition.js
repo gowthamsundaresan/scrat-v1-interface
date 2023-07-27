@@ -2,31 +2,25 @@ import React, { useState, useContext, useEffect } from "react"
 import { SignerContext } from "../contexts/SignerContext"
 import { ThirdwebSDK } from "@thirdweb-dev/sdk"
 import { supabase } from "../lib/supabaseClient"
-import { useTokenPrice } from "./GetTokenPrice"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
-import { useNetInterest } from "./GetNetInterest"
+import {
+    polygonTickerToAddress,
+    polygonTickerToVAddress,
+    deFiContractToAddress,
+    liquidationThresholds,
+    loanToValues,
+} from "../lib/polygonAddresses"
 const { ethers } = require("ethers")
 
 // Artifacts
 const { abi: VariableDebtTokenABI } = require("../artifacts/VariableDebtToken.json")
 const { abi: CrossMarginTradingABI } = require("../artifacts/CrossMarginTrading.json")
-const { abi: IPoolAddressesProviderABI } = require("../artifacts/IPoolAddressesProvider.json")
-const { abi: IPoolABI } = require("../artifacts/IPool.json")
 
 export const OpenLongPosition = ({ closeOpenLongModal }) => {
     const direction = 0
     const signer = useContext(SignerContext)
 
-    const { tokenPrices, pricesLoading } = useTokenPrice()
-    const {
-        polygonTickerToAddress,
-        polygonTickerToVAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    } = useContext(PolygonAddressesContext)
-    const { netInterestRates, interestLoading } = useNetInterest()
-
+    const [netInterestRates, setNetInterestRates] = useState([])
+    const [tokenPrices, setTokenPrices] = useState([])
     const [selectedAsset, setSelectedAsset] = useState("WMATIC")
     const [requestAmount, setRequestAmount] = useState("0")
     const [tokenPrice, setTokenPrice] = useState("")
@@ -39,170 +33,140 @@ export const OpenLongPosition = ({ closeOpenLongModal }) => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (
-            signer &&
-            !pricesLoading &&
-            !polygonTickerToAddress &&
-            !polygonTickerToVAddress &&
-            !interestLoading &&
-            !deFiContractToAddress &&
-            !liquidationThresholds &&
-            !loanToValues
-        ) {
-            setLoading(false)
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        polygonTickerToVAddress,
-        interestLoading,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    ])
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 20000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
 
     useEffect(() => {
+        const fetchRates = async () => {
+            const res = await fetch("/api/interest")
+            const rates = await res.json()
+            setNetInterestRates(rates)
+        }
+
+        fetchRates()
+
+        const intervalId = setInterval(fetchRates, 300000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
+
+    useEffect(() => {
+        const fetchUserAccountData = async () => {
+            const res = await fetch("/api/userdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    signerAddress: signer._address,
+                    poolAddressesProviderAddress: deFiContractToAddress.PoolAddressesProvider,
+                }),
+            })
+
+            if (res.ok) {
+                const { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
+                    await res.json()
+
+                // Token Price
+                setTokenPrice(tokenPrices[selectedAsset].toString())
+
+                // New Max Position Size
+                let max =
+                    (totalDebtBase * 1.05 - totalCollateralBase * currentLiquidationThreshold) /
+                    (loanToValues[selectedAsset] - 1.05)
+
+                max = max < 0 ? 0 : max
+                setMaxPositionSize(Math.floor(Number(max) * 100) / 100)
+
+                // Interest
+                setInterest(netInterestRates["WMATIC"].netInterestRateLong)
+            }
+        }
+
         if (
             signer &&
             Object.keys(tokenPrices).length > 0 &&
-            Object.keys(netInterestRates).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(polygonTickerToVAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
+            Object.keys(netInterestRates).length > 0
         ) {
-            setLoading(false)
-            calculateConstantData(signer)
+            fetchUserAccountData()
         }
-    }, [
-        signer,
-        tokenPrices,
-        polygonTickerToAddress,
-        polygonTickerToVAddress,
-        netInterestRates,
-        deFiContractToAddress,
-        liquidationThresholds,
-        selectedAsset,
-        loanToValues,
-    ])
+    }, [signer, tokenPrices, netInterestRates, selectedAsset])
 
     useEffect(() => {
+        const fetchUserAccountData = async () => {
+            const res = await fetch("/api/userdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    signerAddress: signer._address,
+                    poolAddressesProviderAddress: deFiContractToAddress.PoolAddressesProvider,
+                }),
+            })
+
+            if (res.ok) {
+                const { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
+                    await res.json()
+
+                // Token Price
+                setTokenPrice(tokenPrices[selectedAsset].toString())
+
+                // New HF
+                let newLT =
+                    Number(currentLiquidationThreshold) *
+                        (Number(totalCollateralBase) /
+                            (Number(totalCollateralBase) + Number(requestAmount))) +
+                    liquidationThresholds[selectedAsset] *
+                        (Number(requestAmount) /
+                            (Number(totalCollateralBase) + Number(requestAmount)))
+
+                setNewHealthFactor(
+                    (
+                        ((Number(totalCollateralBase) + Number(requestAmount)) * Number(newLT)) /
+                        (Number(totalDebtBase) + Number(requestAmount))
+                    ).toFixed(2)
+                )
+
+                // New Min NP
+                setNewMinNetPosition(
+                    (
+                        ((Number(totalDebtBase) + Number(requestAmount)) * 1.08) / Number(newLT) -
+                        (Number(totalDebtBase) + Number(requestAmount))
+                    ).toFixed(2)
+                )
+
+                // Interest
+                setInterest(netInterestRates[selectedAsset].netInterestRateLong)
+            }
+        }
+
         if (
             signer &&
             Object.keys(tokenPrices).length > 0 &&
-            Object.keys(netInterestRates).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(polygonTickerToVAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
+            Object.keys(netInterestRates).length > 0
         ) {
+            fetchUserAccountData()
             setLoading(false)
-            calculateNewData(signer)
         }
-    }, [
-        signer,
-        requestAmount,
-        polygonTickerToAddress,
-        polygonTickerToVAddress,
-        selectedAsset,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    ])
+    }, [signer, tokenPrices, requestAmount, selectedAsset])
 
     const handleSelectChange = (e) => {
         setSelectedAsset(e.target.value)
-    }
-
-    const calculateConstantData = async (signer) => {
-        // Addresses and Contracts
-        const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
-        const poolAddressesProviderContract = new ethers.Contract(
-            poolAddressesProviderAddress,
-            IPoolAddressesProviderABI,
-            signer
-        )
-        const poolContractAddress = await poolAddressesProviderContract.getPool()
-        // Fetch and Format Data
-        let { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
-            await new ethers.Contract(poolContractAddress, IPoolABI, signer).getUserAccountData(
-                signer._address
-            )
-
-        totalCollateralBase = ethers.utils.formatUnits(totalCollateralBase.toString(), 8)
-        totalDebtBase = ethers.utils.formatUnits(totalDebtBase.toString(), 8)
-        currentLiquidationThreshold = ethers.utils.formatUnits(
-            currentLiquidationThreshold.toString(),
-            2
-        )
-        currentLiquidationThreshold = Number(currentLiquidationThreshold) / 100
-
-        // Token Price
-        setTokenPrice(tokenPrices[selectedAsset].toString())
-
-        // New Max Position Size
-        let max =
-            (totalDebtBase * 1.05 - totalCollateralBase * currentLiquidationThreshold) /
-            (loanToValues[selectedAsset] - 1.05)
-
-        max = max < 0 ? 0 : max
-        setMaxPositionSize(Math.floor(Number(max) * 100) / 100)
-
-        // Interest
-        setInterest(netInterestRates["WMATIC"].netInterestRateLong)
-    }
-
-    const calculateNewData = async (signer) => {
-        // Addresses and Contracts
-        const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
-        const poolAddressesProviderContract = new ethers.Contract(
-            poolAddressesProviderAddress,
-            IPoolAddressesProviderABI,
-            signer
-        )
-        const poolContractAddress = await poolAddressesProviderContract.getPool()
-
-        // Fetch and Format Data
-        let { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
-            await new ethers.Contract(poolContractAddress, IPoolABI, signer).getUserAccountData(
-                signer._address
-            )
-
-        totalCollateralBase = ethers.utils.formatUnits(totalCollateralBase.toString(), 8)
-        totalDebtBase = ethers.utils.formatUnits(totalDebtBase.toString(), 8)
-        currentLiquidationThreshold = ethers.utils.formatUnits(
-            currentLiquidationThreshold.toString(),
-            2
-        )
-        currentLiquidationThreshold = Number(currentLiquidationThreshold) / 100
-
-        // Token Price
-        setTokenPrice(tokenPrices[selectedAsset].toString())
-
-        // New HF
-        let newLT =
-            Number(currentLiquidationThreshold) *
-                (Number(totalCollateralBase) /
-                    (Number(totalCollateralBase) + Number(requestAmount))) +
-            liquidationThresholds[selectedAsset] *
-                (Number(requestAmount) / (Number(totalCollateralBase) + Number(requestAmount)))
-
-        setNewHealthFactor(
-            (
-                ((Number(totalCollateralBase) + Number(requestAmount)) * Number(newLT)) /
-                (Number(totalDebtBase) + Number(requestAmount))
-            ).toFixed(2)
-        )
-
-        // New Min NP
-        setNewMinNetPosition(
-            (
-                ((Number(totalDebtBase) + Number(requestAmount)) * 1.08) / Number(newLT) -
-                (Number(totalDebtBase) + Number(requestAmount))
-            ).toFixed(2)
-        )
-
-        // Interest
-        setInterest(netInterestRates[selectedAsset].netInterestRateLong)
     }
 
     const handleClick = async () => {

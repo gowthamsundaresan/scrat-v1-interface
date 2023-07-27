@@ -2,21 +2,21 @@ import React, { useEffect, useState, useContext } from "react"
 import { SignerContext } from "../contexts/SignerContext"
 import { ThirdwebSDK } from "@thirdweb-dev/sdk"
 import { supabase } from "../lib/supabaseClient"
-import { useTokenPrice } from "./GetTokenPrice"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
+import {
+    polygonTickerToAddress,
+    deFiContractToAddress,
+    liquidationThresholds,
+} from "../lib/polygonAddresses"
 const { ethers } = require("ethers")
 
 // Artifacts
 const ERC20ABI = require("../artifacts/ERC20ABI.json")
 const { abi: CrossMarginTradingABI } = require("../artifacts/CrossMarginTrading.json")
-const { abi: IPoolAddressesProviderABI } = require("../artifacts/IPoolAddressesProvider.json")
-const { abi: IPoolABI } = require("../artifacts/IPool.json")
 
 export const DepositMarginAcc = ({ closeDepositModal }) => {
     const signer = useContext(SignerContext)
-    const { tokenPrices, pricesLoading } = useTokenPrice()
-    const { polygonTickerToAddress, deFiContractToAddress, liquidationThresholds } =
-        useContext(PolygonAddressesContext)
+
+    const [tokenPrices, setTokenPrices] = useState([])
     const [requestAmount, setRequestAmount] = useState("")
     const [maxDeposit, setMaxDeposit] = useState("")
     const [newHealthFactor, setNewHealthFactor] = useState("")
@@ -27,112 +27,90 @@ export const DepositMarginAcc = ({ closeDepositModal }) => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (
-            (signer && !pricesLoading && !polygonTickerToAddress,
-            !deFiContractToAddress && !liquidationThresholds)
-        ) {
-            setLoading(false)
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    ])
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 20000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
+        if (signer && Object.keys(tokenPrices).length > 0) {
             setLoading(false)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    ])
+    }, [signer, tokenPrices])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
-            setLoading(false)
-            calculateNewData(signer)
+        const fetchUserAccountData = async () => {
+            const res = await fetch("/api/userdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    signerAddress: signer._address,
+                    poolAddressesProviderAddress: deFiContractToAddress.PoolAddressesProvider,
+                }),
+            })
+
+            if (res.ok) {
+                const {
+                    totalCollateralBase,
+                    totalDebtBase,
+                    currentLiquidationThreshold,
+                    usdBalance,
+                } = await res.json()
+
+                let newLT =
+                    Number(currentLiquidationThreshold) *
+                        (Number(totalCollateralBase) /
+                            (Number(totalCollateralBase) + Number(requestAmount))) +
+                    liquidationThresholds["USDC"] *
+                        (Number(requestAmount) /
+                            (Number(totalCollateralBase) + Number(requestAmount)))
+
+                // Max Deposit
+                setMaxDeposit(usdBalance)
+
+                // New HF
+                setNewHealthFactor(
+                    (
+                        ((Number(totalCollateralBase) + Number(requestAmount)) * Number(newLT)) /
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+                // New NP
+                setNewNetPosition(
+                    (
+                        Number(totalCollateralBase) +
+                        Number(requestAmount) -
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+
+                // Min NP
+                setMinNetPosition(
+                    (
+                        (Number(totalDebtBase) * 1.05) / Number(newLT) -
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+            }
         }
-    }, [
-        signer,
-        pricesLoading,
-        requestAmount,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-    ])
 
-    const calculateNewData = async (signer) => {
-        // Addresses and Contracts
-        const usdcAddress = polygonTickerToAddress["USDC"]
-        const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
-        const poolAddressesProviderContract = new ethers.Contract(
-            poolAddressesProviderAddress,
-            IPoolAddressesProviderABI,
-            signer
-        )
-        const usdcContract = new ethers.Contract(usdcAddress, ERC20ABI)
-        const poolContractAddress = await poolAddressesProviderContract.getPool()
-
-        // Fetch and Format Data
-        let { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
-            await new ethers.Contract(poolContractAddress, IPoolABI, signer).getUserAccountData(
-                signer._address
-            )
-
-        totalCollateralBase = ethers.utils.formatUnits(totalCollateralBase.toString(), 8)
-        totalDebtBase = ethers.utils.formatUnits(totalDebtBase.toString(), 8)
-        currentLiquidationThreshold = ethers.utils.formatUnits(
-            currentLiquidationThreshold.toString(),
-            2
-        )
-        currentLiquidationThreshold = Number(currentLiquidationThreshold) / 100
-
-        // Max Deposit
-        let usdBalance = await usdcContract.connect(signer.provider).balanceOf(signer._address)
-        usdBalance = Number(ethers.utils.formatUnits(usdBalance.toString(), 6))
-        usdBalance = Math.floor(usdBalance * 1000) / 1000
-        setMaxDeposit(usdBalance)
-
-        // New HF
-        let newLT =
-            Number(currentLiquidationThreshold) *
-                (Number(totalCollateralBase) /
-                    (Number(totalCollateralBase) + Number(requestAmount))) +
-            liquidationThresholds["USDC"] *
-                (Number(requestAmount) / (Number(totalCollateralBase) + Number(requestAmount)))
-
-        setNewHealthFactor(
-            (
-                ((Number(totalCollateralBase) + Number(requestAmount)) * Number(newLT)) /
-                Number(totalDebtBase)
-            ).toFixed(2)
-        )
-        // New NP
-        setNewNetPosition(
-            (Number(totalCollateralBase) + Number(requestAmount) - Number(totalDebtBase)).toFixed(2)
-        )
-
-        // Min NP
-        setMinNetPosition(
-            ((Number(totalDebtBase) * 1.05) / Number(newLT) - Number(totalDebtBase)).toFixed(2)
-        )
-    }
+        if (signer && Object.keys(tokenPrices).length > 0) {
+            fetchUserAccountData()
+            setLoading(false)
+        }
+    }, [signer, tokenPrices, requestAmount])
 
     const handleClick = async () => {
         // Init
@@ -249,7 +227,7 @@ export const DepositMarginAcc = ({ closeDepositModal }) => {
                 </div>
                 {isOverMax && (
                     <div className="text-red-500 text-xs mt-2">
-                        Amount in wallet is {maxDeposit}
+                        Amount in wallet is ${maxDeposit}
                     </div>
                 )}
             </div>

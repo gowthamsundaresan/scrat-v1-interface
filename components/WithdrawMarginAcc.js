@@ -2,153 +2,117 @@ import React, { useEffect, useState, useContext } from "react"
 import { SignerContext } from "../contexts/SignerContext"
 import { ThirdwebSDK } from "@thirdweb-dev/sdk"
 import { supabase } from "../lib/supabaseClient"
-import { useTokenPrice } from "./GetTokenPrice"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
-import { withCoalescedInvoke } from "next/dist/lib/coalesced-function"
+import {
+    polygonTickerToAAddress,
+    deFiContractToAddress,
+    liquidationThresholds,
+} from "../lib/polygonAddresses"
 const { ethers } = require("ethers")
 
 // Artifacts
 const ERC20ABI = require("../artifacts/ERC20ABI.json")
 const { abi: CrossMarginTradingABI } = require("../artifacts/CrossMarginTrading.json")
-const { abi: IPoolAddressesProviderABI } = require("../artifacts/IPoolAddressesProvider.json")
-const { abi: IPoolABI } = require("../artifacts/IPool.json")
 
 export const WithdrawMarginAcc = ({ closeWithdrawModal }) => {
     const signer = useContext(SignerContext)
-    const { tokenPrices, pricesLoading } = useTokenPrice()
-    const {
-        polygonTickerToAddress,
-        polygonTickerToAAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    } = useContext(PolygonAddressesContext)
+
+    const [tokenPrices, setTokenPrices] = useState([])
     const [requestAmount, setRequestAmount] = useState("0")
     const [maxWithdraw, setMaxWithdraw] = useState("")
     const [newHealthFactor, setNewHealthFactor] = useState("")
     const [newNetPosition, setNewNetPosition] = useState("")
     const [newMinNetPosition, setNewMinNetPosition] = useState("")
     const [transactionError, setTransactionError] = useState(null)
+    const [isOverMax, setIsOverMax] = useState(false)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (
-            signer &&
-            !pricesLoading &&
-            !polygonTickerToAddress &&
-            !deFiContractToAddress &&
-            !liquidationThresholds &&
-            !loanToValues
-        ) {
-            setLoading(false)
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    ])
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 20000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
+        if (signer && Object.keys(tokenPrices).length > 0) {
             setLoading(false)
         }
-    }, [
-        signer,
-        pricesLoading,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    ])
+    }, [signer, tokenPrices])
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0 &&
-            Object.keys(deFiContractToAddress).length !== 0
-        ) {
-            setLoading(false)
-            calculateNewData(signer)
+        const fetchUserAccountData = async () => {
+            const res = await fetch("/api/userdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    signerAddress: signer._address,
+                    poolAddressesProviderAddress: deFiContractToAddress.PoolAddressesProvider,
+                }),
+            })
+
+            if (res.ok) {
+                const { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
+                    await res.json()
+
+                let newLT =
+                    Number(currentLiquidationThreshold) *
+                        (Number(totalCollateralBase) /
+                            (Number(totalCollateralBase) - Number(requestAmount))) -
+                    liquidationThresholds["USDC"] *
+                        (Number(requestAmount) /
+                            (Number(totalCollateralBase) - Number(requestAmount)))
+
+                // Max Withdraw
+                let max =
+                    (Number(totalCollateralBase) * Number(currentLiquidationThreshold) -
+                        1.05 * Number(totalDebtBase)) /
+                    liquidationThresholds["USDC"]
+
+                max = max < 0 ? 0 : max
+                setMaxWithdraw(Math.floor(Number(max) * 100) / 100)
+
+                // New HF
+                setNewHealthFactor(
+                    (
+                        ((Number(totalCollateralBase) - Number(requestAmount)) * Number(newLT)) /
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+                // New NP
+                setNewNetPosition(
+                    (
+                        Number(totalCollateralBase) -
+                        Number(requestAmount) -
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+
+                // Min NP
+                setNewMinNetPosition(
+                    (
+                        (Number(totalDebtBase) * 1.05) / Number(newLT) -
+                        Number(totalDebtBase)
+                    ).toFixed(2)
+                )
+            }
         }
-    }, [
-        signer,
-        pricesLoading,
-        requestAmount,
-        polygonTickerToAddress,
-        deFiContractToAddress,
-        liquidationThresholds,
-        loanToValues,
-    ])
 
-    const calculateNewData = async (signer) => {
-        // Addresses and Contracts
-        const poolAddressesProviderAddress = deFiContractToAddress.PoolAddressesProvider
-        const poolAddressesProviderContract = new ethers.Contract(
-            poolAddressesProviderAddress,
-            IPoolAddressesProviderABI,
-            signer
-        )
-        const poolContractAddress = await poolAddressesProviderContract.getPool()
-
-        // Fetch and Format Data
-        let { totalCollateralBase, totalDebtBase, currentLiquidationThreshold } =
-            await new ethers.Contract(poolContractAddress, IPoolABI, signer).getUserAccountData(
-                signer._address
-            )
-
-        totalCollateralBase = ethers.utils.formatUnits(totalCollateralBase.toString(), 8)
-        totalDebtBase = ethers.utils.formatUnits(totalDebtBase.toString(), 8)
-        currentLiquidationThreshold = ethers.utils.formatUnits(
-            currentLiquidationThreshold.toString(),
-            2
-        )
-        currentLiquidationThreshold = Number(currentLiquidationThreshold) / 100
-
-        let newLT =
-            Number(currentLiquidationThreshold) *
-                (Number(totalCollateralBase) /
-                    (Number(totalCollateralBase) - Number(requestAmount))) -
-            liquidationThresholds["USDC"] *
-                (Number(requestAmount) / (Number(totalCollateralBase) - Number(requestAmount)))
-
-        console.log("currentLiquidationThreshold", currentLiquidationThreshold.toString())
-        console.log("newLT", newLT.toString())
-
-        // Max Withdraw
-        let max =
-            (Number(totalCollateralBase) * Number(currentLiquidationThreshold) -
-                1.05 * Number(totalDebtBase)) /
-            liquidationThresholds["USDC"]
-
-        max = max < 0 ? 0 : max
-        setMaxWithdraw(Math.floor(Number(max) * 100) / 100)
-
-        // New HF
-        setNewHealthFactor(
-            (
-                ((Number(totalCollateralBase) - Number(requestAmount)) * Number(newLT)) /
-                Number(totalDebtBase)
-            ).toFixed(2)
-        )
-        // New NP
-        setNewNetPosition(
-            (Number(totalCollateralBase) - Number(requestAmount) - Number(totalDebtBase)).toFixed(2)
-        )
-
-        // Min NP
-        setNewMinNetPosition(
-            ((Number(totalDebtBase) * 1.05) / Number(newLT) - Number(totalDebtBase)).toFixed(2)
-        )
-    }
+        if (signer && Object.keys(tokenPrices).length > 0) {
+            fetchUserAccountData()
+            setLoading(false)
+        }
+    }, [signer, tokenPrices, requestAmount])
 
     const handleClick = async () => {
         // Init
@@ -250,30 +214,41 @@ export const WithdrawMarginAcc = ({ closeWithdrawModal }) => {
 
             <div className="text-base font-regular text-black">Amount in USDC</div>
             <div>
-                <input
-                    type="number"
-                    value={requestAmount}
-                    max={Number(maxWithdraw)}
-                    onChange={(e) => {
-                        let newValue = e.target.value
-                        if (
-                            newValue === "" ||
-                            (!isNaN(newValue) && newValue >= 0 && newValue <= Number(maxWithdraw))
-                        ) {
-                            setRequestAmount(newValue)
-                        }
-                    }}
-                    placeholder="10 USDC"
-                    className="bg-white text-black placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 border-black"
-                ></input>
-                <button
-                    onClick={() => {
-                        setRequestAmount(maxWithdraw)
-                    }}
-                    className="text-black text-sm ml-2"
-                >
-                    MAX
-                </button>
+                <div className="flex items-center">
+                    <input
+                        type="number"
+                        value={requestAmount}
+                        max={Number(maxWithdraw)}
+                        onChange={(e) => {
+                            let newValue = e.target.value
+                            if (newValue === "" || (!isNaN(newValue) && newValue >= 0)) {
+                                setRequestAmount(newValue)
+                                setIsOverMax(false)
+                            }
+                            if (Number(newValue) > Number(maxWithdraw)) {
+                                setIsOverMax(true)
+                            }
+                        }}
+                        placeholder="10 USDC"
+                        className={`bg-white placeholder-black text-base placeholder-opacity-40 p-2.5 border-b-2 ${
+                            isOverMax ? "text-red-500 border-red-500" : "text-black border-black"
+                        }`}
+                    ></input>
+                    <button
+                        onClick={() => {
+                            setRequestAmount(maxWithdraw)
+                            setIsOverMax(false)
+                        }}
+                        className="text-black text-sm ml-2"
+                    >
+                        MAX
+                    </button>
+                </div>
+                {isOverMax && (
+                    <div className="text-red-500 text-xs mt-2">
+                        Max withdraw possible is ${maxWithdraw}
+                    </div>
+                )}
             </div>
 
             <div className="text-base font-regular text-black">Wallet Address</div>
@@ -289,12 +264,13 @@ export const WithdrawMarginAcc = ({ closeWithdrawModal }) => {
 
             <div className="text-base font-regular text-black">Min. Net Position</div>
             <div className="text-base font-regular text-black">${newMinNetPosition}</div>
-
             <div
-                onClick={loading ? null : handleClick}
+                onClick={loading || isOverMax ? null : handleClick}
                 className={`flex text-base justify-center items-center text-black ${
                     loading
                         ? "bg-zinc-700 text-white"
+                        : isOverMax
+                        ? "cursor-not-allowed opacity-50 bg-white text-black"
                         : "bg-white hover:text-white hover:bg-zinc-900"
                 } px-6 py-4 rounded-lg mt-4 col-span-2 cursor-${loading ? "default" : "pointer"}`}
             >

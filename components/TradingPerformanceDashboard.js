@@ -1,31 +1,41 @@
 import React, { useState, useContext, useEffect } from "react"
 import { SignerContext } from "../contexts/SignerContext"
-import { useTokenPrice } from "./GetTokenPrice"
 import { supabase } from "../lib/supabaseClient"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
+import { polygonTickerToAddress } from "../lib/polygonAddresses"
 
 export const TradingPerformanceDashboard = () => {
     const signer = useContext(SignerContext)
-    const { polygonTickerToAddress } = useContext(PolygonAddressesContext)
-    const { tokenPrices, pricesLoading } = useTokenPrice()
 
+    const [tokenPrices, setTokenPrices] = useState([])
     const [inAccount, setInAccount] = useState([" Loading"])
     const [unrealizedPandL, setUnrealizedPandL] = useState([" Loading"])
     const [realizedPandL, setRealizedPandL] = useState([" Loading"])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (
-            signer &&
-            Object.keys(tokenPrices).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0
-        ) {
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
+        }
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 60000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (signer && Object.keys(tokenPrices).length > 0) {
             setLoading(false)
             fetchDepositsData(signer)
             fetchRealizedPandLData(signer)
             fetchUnrealizedPandLData(signer)
         }
-    }, [signer, tokenPrices, pricesLoading])
+    }, [signer, tokenPrices])
 
     const fetchDepositsData = async (signer) => {
         // Fetch Margin Account from DB

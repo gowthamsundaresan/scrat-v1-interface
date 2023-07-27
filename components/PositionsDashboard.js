@@ -1,20 +1,17 @@
 import React, { useState, useContext, useEffect } from "react"
 import { SignerContext } from "../contexts/SignerContext"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
-import { useTokenPrice } from "./GetTokenPrice"
-import { useNetInterest } from "./GetNetInterest"
 import { supabase } from "../lib/supabaseClient"
 import { OpenLongPosition } from "./OpenLongPosition"
 import { OpenShortPosition } from "./OpenShortPosition"
 import { CloseLongPosition } from "./CloseLongPosition"
 import { CloseShortPosition } from "./CloseShortPosition"
+import { polygonTickerToAddress } from "../lib/polygonAddresses"
 
 export const PositionsDashboard = () => {
     const signer = useContext(SignerContext)
-    const { polygonTickerToAddress } = useContext(PolygonAddressesContext)
-    const { tokenPrices, pricesLoading } = useTokenPrice()
-    const { netInterestRates, interestLoading } = useNetInterest()
 
+    const [tokenPrices, setTokenPrices] = useState([])
+    const [netInterestRates, setNetInterestRates] = useState([])
     const [longPositions, setLongPositions] = useState([])
     const [shortPositions, setShortPositions] = useState([])
     const [isOpenLongPositionModalOpen, setIsOpenLongPositionModalOpen] = useState(false)
@@ -30,22 +27,47 @@ export const PositionsDashboard = () => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (signer && !pricesLoading && !polygonTickerToAddress && !interestLoading) {
-            setLoading(false)
+        const fetchPrices = async () => {
+            const res = await fetch("/api/prices")
+            const prices = await res.json()
+            setTokenPrices(prices)
         }
-    }, [signer, pricesLoading, polygonTickerToAddress, interestLoading])
+
+        fetchPrices()
+
+        const intervalId = setInterval(fetchPrices, 60000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
+
+    useEffect(() => {
+        const fetchRates = async () => {
+            const res = await fetch("/api/interest")
+            const rates = await res.json()
+            setNetInterestRates(rates)
+        }
+
+        fetchRates()
+
+        const intervalId = setInterval(fetchRates, 300000)
+
+        return () => {
+            clearInterval(intervalId)
+        }
+    }, [])
 
     useEffect(() => {
         if (
             signer &&
             Object.keys(tokenPrices).length > 0 &&
-            Object.keys(netInterestRates).length > 0 &&
-            Object.keys(polygonTickerToAddress).length !== 0
+            Object.keys(netInterestRates).length > 0
         ) {
             setLoading(false)
             fetchData(signer)
         }
-    }, [signer, tokenPrices, polygonTickerToAddress, netInterestRates])
+    }, [signer, tokenPrices, netInterestRates])
 
     const fetchData = async (signer) => {
         // Fetch Long Positions from DB

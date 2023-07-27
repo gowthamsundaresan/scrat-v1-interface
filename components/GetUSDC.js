@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useContext } from "react"
+import React, { useState, useContext } from "react"
 import { SignerContext } from "../contexts/SignerContext"
-import { PolygonAddressesContext } from "../contexts/PolygonAddressesContext"
 import { ThirdwebSDK } from "@thirdweb-dev/sdk"
+import { polygonTickerToAddress, deFiContractToAddress } from "../lib/polygonAddresses"
 const { ethers } = require("ethers")
 
 // Artifacts
@@ -11,7 +11,6 @@ const { abi: IUniswapV3PoolABI } = require("../artifacts/IUniswapV3Pool.json")
 
 export const GetUSDC = () => {
     const signer = useContext(SignerContext)
-    const { polygonTickerToAddress, deFiContractToAddress } = useContext(PolygonAddressesContext)
 
     const [requestAmount, setRequestAmount] = useState("")
 
