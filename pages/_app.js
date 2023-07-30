@@ -1,5 +1,5 @@
 import { ThirdwebProvider } from "@thirdweb-dev/react"
-// import { Chain } from "@thirdweb-dev/chains"
+import { Analytics } from "@vercel/analytics/react"
 import "@/styles/globals.css"
 import { Red_Hat_Text } from "next/font/google"
 
@@ -15,6 +15,7 @@ export default function App({ Component, pageProps }) {
         <main className={redHatText.className}>
             <ThirdwebProvider activeChain={activeChain}>
                 <Component {...pageProps} />
+                <Analytics />
             </ThirdwebProvider>
         </main>
     )
